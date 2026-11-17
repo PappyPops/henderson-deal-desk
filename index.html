@@ -888,7 +888,8 @@
       "- Omit any field you cannot see; keep the keys you do fill.\n"+
       "- Dates as MM/DD/YYYY. Money as plain numbers, no $ or commas.\n"+
       "- New vs used from the N-NEW / U-USED designation.\n"+
-      (isM?"- The trailer's Serial # is its VIN for titling.\n":"- Each unit: list one object per unit in \"units\" (fleet deals repeat the same price/fees, only VIN/stock/model change). body is UTV/RTV/ATV as shown.\n")+
+      "- THE VIN/SERIAL IS REQUIRED. In IDS it is the \"Serial #\" field on the Description / stock screen (and the VIN column of any list). Always capture it.\n"+
+      (isM?"- boat.hin = the Hull ID / \"Serial #\" on the boat Description tab. motor.serial = the motor \"Serial No\". trailer.serial = the trailer \"Serial #\" (this is the trailer's VIN for titling).\n":"- Each unit's vin = its \"Serial #\" on the Description/stock screen. List one object per unit in \"units\" (fleet deals repeat the same price/fees, only VIN/stock/model change). body is UTV/RTV/ATV as shown.\n")+
       "- Do NOT include dealer, bank, lien, or seller info — the tool adds those.";
   }
   $("copyPromptBtn").addEventListener("click",function(){
@@ -913,11 +914,11 @@
     if(d.parish===undefined && d.city){ var p=PARISH[String(d.city).toUpperCase()]; if(p) setVal("parish",p); }
     if(dealType==="marine"){
       var b=d.boat||{};
-      setVal("b_year",b.year);setVal("b_make",b.make);setVal("b_model",b.model);setVal("b_hin",b.hin);setVal("b_price",b.price);
+      setVal("b_year",b.year);setVal("b_make",b.make);setVal("b_model",b.model);setVal("b_hin",b.hin||b.vin||b.serial||b.hid);setVal("b_price",b.price);
       if(b.newUsed)setVal("b_nu",b.newUsed); if(b.hullMaterial)setVal("b_hull",b.hullMaterial); if(b.vesselType)setVal("b_vtype",b.vesselType);
       setVal("b_ft",b.lengthFt);setVal("b_in",b.lengthIn);setVal("b_stock",b.stock);setVal("b_deal",b.dealNo);
       if(d.motor){var m=d.motor;setVal("m_year",m.year);setVal("m_make",m.make);setVal("m_model",m.model);setVal("m_serial",m.serial);setVal("m_hp",m.hp);setVal("m_price",m.price);}
-      if(d.trailer){var t=d.trailer;setVal("t_year",t.year);setVal("t_make",t.make);setVal("t_model",t.model);setVal("t_serial",t.serial);setVal("t_price",t.price);setVal("t_color",t.color);setVal("t_tax",t.tax);}
+      if(d.trailer){var t=d.trailer;setVal("t_year",t.year);setVal("t_make",t.make);setVal("t_model",t.model);setVal("t_serial",t.serial||t.vin||t.hin);setVal("t_price",t.price);setVal("t_color",t.color);setVal("t_tax",t.tax);}
       if(d.co){ $("hasCo").checked=true; $("coFields").classList.remove("hidden");
         setVal("co_first",d.co.firstName);setVal("co_mi",d.co.middleInitial);setVal("co_last",d.co.lastName);setVal("co_addr",d.co.address);setVal("co_city",d.co.city);setVal("co_state",d.co.state);setVal("co_zip",d.co.zip);setVal("co_phone",d.co.phone);setVal("co_dl",d.co.dl);setVal("co_email",d.co.email);setVal("co_dob",d.co.dob); }
       $("importMsg").textContent="Loaded. Review the boat/motor/trailer fields, then START DEAL.";
@@ -928,7 +929,7 @@
         addUnit();
         var blk=$("units").lastChild;
         function sq(c,val){var e=blk.querySelector("."+c); if(e&&val!==undefined&&val!==null)e.value=val;}
-        sq("u_year",u.year);sq("u_make",u.make);sq("u_model",u.model);sq("u_vin",u.vin);sq("u_body",u.body);sq("u_color",u.color);
+        sq("u_year",u.year);sq("u_make",u.make);sq("u_model",u.model);sq("u_vin",u.vin||u.serial||u.hin||u.vin_serial);sq("u_body",u.body);sq("u_color",u.color);
         if(u.newUsed)sq("u_nu",u.newUsed); sq("u_stock",u.stock);sq("u_deal",u.dealNo);sq("u_price",u.price);sq("u_options",u.options);sq("u_optdesc",u.optionsDesc);sq("u_rebate",u.rebate);sq("u_tax",u.tax);
       });
       $("importMsg").textContent="Loaded "+list.length+" unit(s). Review, then START DEAL.";
