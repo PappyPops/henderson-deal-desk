@@ -231,6 +231,10 @@
       <div class="col"><label>Tire fee</label><input type="text" id="f_tire" value="9.00"></div>
       <div class="col"><label>Mortgage fee</label><input type="text" id="f_mortgage" value="15.00"></div>
     </div>
+    <div class="row" style="margin-top:8px">
+      <div class="col" style="max-width:170px"><label>UCC filing fee</label><input type="text" id="f_ucc"></div>
+      <div class="col" style="max-width:170px"><label>WLF fee</label><input type="text" id="f_wlf"></div>
+    </div>
     <div class="row" style="margin-top:12px;align-items:flex-end">
       <div class="col" style="max-width:220px">
         <div class="checkline"><input type="checkbox" id="taxExempt"><label for="taxExempt" style="margin:0">Tax exempt</label></div>
@@ -242,6 +246,29 @@
     <div class="row" style="margin-top:10px">
       <div class="col" style="max-width:220px"><label>Purchase date</label><input type="text" id="date"></div>
     </div>
+  </div>
+
+  <div class="card">
+    <h2>7 · Backend / F&amp;I products <span class="muted" style="text-transform:none;letter-spacing:0">— optional; prints on the Bill of Sale and adds to the total</span></h2>
+    <div class="row">
+      <div class="col"><label>Mechanical Protection / Service Contract</label><input type="text" id="be_mech"></div>
+      <div class="col"><label>GAP</label><input type="text" id="be_gap"></div>
+      <div class="col"><label>LifeTime Battery Replacement</label><input type="text" id="be_batt"></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="col"><label>Theft / Property Insurance</label><input type="text" id="be_theft"></div>
+      <div class="col"><label>Paint / Interior Protection</label><input type="text" id="be_paint"></div>
+      <div class="col"><label>PrePaid Maintenance</label><input type="text" id="be_prepaid"></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="col" style="flex:2"><label>Other product (label)</label><input type="text" id="be_o1_label"></div>
+      <div class="col"><label>Amount</label><input type="text" id="be_o1_amt"></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="col" style="flex:2"><label>Other product (label)</label><input type="text" id="be_o2_label"></div>
+      <div class="col"><label>Amount</label><input type="text" id="be_o2_amt"></div>
+    </div>
+    <div class="note">Leave blank any that don't apply. Enter the customer price (premium), not cost.</div>
   </div>
 
   <div id="errbox"></div>
@@ -525,8 +552,12 @@
     var tire = d.fees.tire || 0;
     var dmv = (parseFloat(d.fees.title || 0) + parseFloat(d.fees.license || 0) + parseFloat(d.fees.handling || 0));
     var doc = d.fees.doc || 0;
-    var feeTotal = parseFloat(money(tire) || 0) + dmv + parseFloat(money(doc) || 0);
-    var total = subtotal + parseFloat(money(tax) || 0) + feeTotal;
+    var wlf = d.fees.wlf || 0, ucc = d.fees.ucc || 0;
+    function n(x) { return parseFloat(money(x) || 0); }
+    var be = d.backend || {};
+    var backendTotal = n(be.mechanical) + n(be.gap) + n(be.battery) + n(be.theft) + n(be.paint) + n(be.prepaid) + n(be.other1 && be.other1.amt) + n(be.other2 && be.other2.amt);
+    var feeTotal = n(tire) + dmv + n(doc) + n(wlf) + n(ucc);
+    var total = subtotal + n(tax) + feeTotal + backendTotal;
     var out = [
       { f: "order_no", v: d.po || "" },
       { f: "hdr_field_1", v: u.dealNo || d.dealNo || "" },
@@ -568,7 +599,18 @@
     }
     out.push({ f: "ldeq_fee", v: money(tire) });
     out.push({ f: "dmv_fees", v: money(dmv) });
+    if (n(wlf)) out.push({ f: "wlf_fees", v: money(wlf) });
+    if (n(ucc)) out.push({ f: "ucc_fees", v: money(ucc) });
     out.push({ f: "doc_notary", v: money(doc) });
+    // backend / F&I products -> their BOS lines (only when present)
+    if (n(be.mechanical)) out.push({ f: "warranty_amt", v: money(be.mechanical) });
+    if (n(be.gap)) out.push({ f: "gap_amt", v: money(be.gap) });
+    if (n(be.battery)) out.push({ f: "tire_wheel", v: money(be.battery) });
+    if (n(be.theft)) out.push({ f: "theft", v: money(be.theft) });
+    if (n(be.paint)) out.push({ f: "life_health", v: money(be.paint) });
+    if (n(be.prepaid)) out.push({ f: "platinum", v: money(be.prepaid) });
+    if (be.other1 && n(be.other1.amt)) { out.push({ f: "extra1_label", v: be.other1.label || "" }); out.push({ f: "extra1_amt", v: money(be.other1.amt) }); }
+    if (be.other2 && n(be.other2.amt)) { out.push({ f: "extra2_label", v: be.other2.label || "" }); out.push({ f: "extra2_amt", v: money(be.other2.amt) }); }
     out.push({ f: "total", v: money(total) });
     out.push({ f: "down_payment", v: "0.00" });
     out.push({ f: "balance_due", v: money(total) });
@@ -611,6 +653,7 @@
     {key:"usbank", name:"US Bank", address:"PO BOX 3427", city:"Oshkosh", state:"WI", zip:"54903"},
     {key:"pelican", name:"Pelican Credit Union", address:"PO Box 40088", city:"Baton Rouge", state:"LA", zip:"70835"},
     {key:"swla", name:"Southwest Louisiana Credit Union", address:"2255 E McNeese Street", city:"Lake Charles", state:"LA", zip:"70607"},
+    {key:"sheffield", name:"Sheffield Financial", address:"PO Box 25127", city:"Winston-Salem", state:"NC", zip:"27114"},
     {key:"oneoff", name:"One-off lender", oneoff:true},
     {key:"cash", name:"Cash / No lien", cash:true}
   ];
@@ -750,7 +793,8 @@
       address:v("address"), city:v("city"), state:v("state"), zip:v("zip"), parish:v("parish"),
       phone:v("phone"), email:v("email"), dob:v("dob"), dl:v("dl"), dlState:v("dlState"),
       taxExempt:$("taxExempt").checked, taxPct:"",
-      fees:{title:num("f_title"),doc:num("f_doc"),handling:num("f_handling"),license:num("f_license"),tire:num("f_tire"),mortgage:num("f_mortgage")},
+      fees:{title:num("f_title"),doc:num("f_doc"),handling:num("f_handling"),license:num("f_license"),tire:num("f_tire"),mortgage:num("f_mortgage"),ucc:num("f_ucc"),wlf:num("f_wlf")},
+      backend:{mechanical:v("be_mech"),gap:v("be_gap"),battery:v("be_batt"),theft:v("be_theft"),paint:v("be_paint"),prepaid:v("be_prepaid"),other1:{label:v("be_o1_label"),amt:v("be_o1_amt")},other2:{label:v("be_o2_label"),amt:v("be_o2_amt")}},
       lien:lienObj()
     };
     if(dealType==="marine" && $("hasCo").checked){
@@ -910,7 +954,8 @@
     ["firstName","middleInitial","middleName","lastName","address","city","state","zip","parish","phone","email","dob","dl","dlState"].forEach(function(k){ setVal(k,d[k]); });
     setVal("entity",d.entityName); setVal("ein",d.ein); setVal("cust",d.cust); setVal("po",d.po); setVal("salesAssoc",d.salesAssociate);
     if(typeof d.taxExempt==="boolean") setChk("taxExempt",d.taxExempt);
-    if(d.fees){ setVal("f_title",d.fees.title); setVal("f_doc",d.fees.doc); setVal("f_handling",d.fees.handling); setVal("f_license",d.fees.license); setVal("f_tire",d.fees.tire); setVal("f_mortgage",d.fees.mortgage); }
+    if(d.fees){ setVal("f_title",d.fees.title); setVal("f_doc",d.fees.doc); setVal("f_handling",d.fees.handling); setVal("f_license",d.fees.license); setVal("f_tire",d.fees.tire); setVal("f_mortgage",d.fees.mortgage); setVal("f_ucc",d.fees.ucc); setVal("f_wlf",d.fees.wlf); }
+    if(d.backend){ var be=d.backend; setVal("be_mech",be.mechanical); setVal("be_gap",be.gap); setVal("be_batt",be.battery); setVal("be_theft",be.theft); setVal("be_paint",be.paint); setVal("be_prepaid",be.prepaid); if(be.other1){setVal("be_o1_label",be.other1.label);setVal("be_o1_amt",be.other1.amt);} if(be.other2){setVal("be_o2_label",be.other2.label);setVal("be_o2_amt",be.other2.amt);} }
     if(d.parish===undefined && d.city){ var p=PARISH[String(d.city).toUpperCase()]; if(p) setVal("parish",p); }
     if(dealType==="marine"){
       var b=d.boat||{};
