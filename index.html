@@ -97,6 +97,19 @@
   </div>
 
   <div class="card">
+    <h2>Quick fill from screenshots <span class="muted" style="text-transform:none;letter-spacing:0">— optional, uses Claude in your browser</span></h2>
+    <div class="row" style="align-items:center">
+      <button type="button" class="btn" id="copyPromptBtn">① Copy screenshot prompt</button>
+      <div class="muted" style="flex:1;min-width:200px">Click, then in the Claude side-panel paste it (Ctrl/Cmd-V) and drop your IDS screenshots. Claude replies with a short JSON block — paste it below and hit Load.</div>
+    </div>
+    <div style="margin-top:12px">
+      <label>② Paste Claude's JSON reply, then Load</label>
+      <textarea id="importBox" rows="4" placeholder='{ "lastName": "SMITH", "firstName": "JOHN", ... }'></textarea>
+      <div style="margin-top:8px"><button type="button" class="btn primary" id="loadJsonBtn">Load into form ↓</button> <span id="importMsg" class="muted"></span></div>
+    </div>
+  </div>
+
+  <div class="card">
     <h2>4 · Buyer</h2>
     <div class="checkline"><input type="checkbox" id="isEntity"><label for="isEntity" style="margin:0">Business / entity buyer</label></div>
     <div id="personName" class="row" style="margin-top:10px">
@@ -125,8 +138,8 @@
       <div class="col"><label>Driver's license #</label><input type="text" id="dl"></div>
       <div class="col" style="max-width:90px"><label>DL state</label><input type="text" id="dlState" value="LA"></div>
     </div>
-    <div id="coBuyerWrap" class="hidden">
-      <div class="checkline"><input type="checkbox" id="hasCo"><label for="hasCo" style="margin:0">Add co-buyer (LDWF)</label></div>
+    <div id="coBuyerWrap">
+      <div class="checkline"><input type="checkbox" id="hasCo"><label for="hasCo" style="margin:0">Add co-buyer / joint owner</label></div>
       <div id="coFields" class="hidden" style="margin-top:10px;border-top:1px dashed var(--line);padding-top:12px">
         <div class="row">
           <div class="col"><label>Co first</label><input type="text" id="co_first"></div>
@@ -318,12 +331,21 @@
   }
   function fullName(d) {
     if (d.buyerIsEntity) return d.entityName || "";
-    return [d.firstName, d.lastName].filter(Boolean).join(" "); // first/last; MI goes in its own box
+    var nm = [d.firstName, d.middleName, d.lastName].filter(Boolean).join(" ");
+    if (d.co && (d.co.firstName || d.co.lastName)) {
+      nm += " & " + [d.co.firstName, d.co.lastName].filter(Boolean).join(" ");
+    }
+    return nm;
   }
   function ownerLast(d) { // "LAST, FIRST MIDDLE" for VEH owner line
     if (d.buyerIsEntity) return d.entityName || "";
     var given = [d.firstName, d.middleName].filter(Boolean).join(" ");
     return [d.lastName, given].filter(Boolean).join(", ");
+  }
+  function coOwnerLast(co) { // "LAST, FIRST MIDDLE" for a co-buyer / joint owner
+    if (!co) return "";
+    var given = [co.firstName, co.middleName].filter(Boolean).join(" ");
+    return [co.lastName, given].filter(Boolean).join(", ");
   }
 
   // ---------- R-1331 (marine only) ----------
@@ -468,6 +490,7 @@
       { f: "Mileage", v: "N/A" },
       { f: "Model", v: isTrailer ? (u.model || "") : (u.model || "") },
       { f: "Name of Owner", v: ownerLast(d) },
+      { f: "Name of Joint Owner", v: d.co ? coOwnerLast(d.co) : "" },
       { f: "DL", v: d.buyerIsEntity ? (d.ein || "") : (d.dl || "") },
       { f: "Owner Principal Address", v: d.address || "" },
       { f: "City", v: d.city || "" },
@@ -509,9 +532,20 @@
       { f: "1c3", v: d.state || "" },
       { f: "1c4", v: d.zip || "" },
       { f: "1c5", v: "USA" },
-      { f: "1g2", v: true, cb: true },
-      { f: "2g2", v: true, cb: true }
+      { f: "1g2", v: true, cb: true }
     ];
+    if (d.co && (d.co.lastName || d.co.firstName)) {
+      out.push({ f: "2b", v: d.co.lastName || "" });
+      out.push({ f: "2b2", v: d.co.firstName || "" });
+      out.push({ f: "2b3", v: d.co.middleName || "" });
+      out.push({ f: "2c", v: d.co.address || "" });
+      out.push({ f: "2c2", v: d.co.city || "" });
+      out.push({ f: "2c3", v: d.co.state || "" });
+      out.push({ f: "2c4", v: d.co.zip || "" });
+      out.push({ f: "2c5", v: "USA" });
+    } else {
+      out.push({ f: "2g2", v: true, cb: true });
+    }
     if (d.lien) {
       out.push({ f: "3a", v: d.lien.name || "" });
       out.push({ f: "3c", v: d.lien.address || "" });
@@ -680,7 +714,7 @@
       btn.classList.add("on"); dealType=btn.getAttribute("data-type");
       $("marineCard").classList.toggle("hidden",dealType!=="marine");
       $("equipCard").classList.toggle("hidden",dealType!=="equipment");
-      $("coBuyerWrap").classList.toggle("hidden",dealType!=="marine");
+      $("coBuyerWrap").classList.remove("hidden");
       renderForms();
       if(dealType==="equipment" && $("units").children.length===0) addUnit();
     });
@@ -786,8 +820,8 @@
       backend:{mechanical:v("be_mech"),gap:v("be_gap"),battery:v("be_batt"),theft:v("be_theft"),paint:v("be_paint"),prepaid:v("be_prepaid"),other1:{label:v("be_o1_label"),amt:v("be_o1_amt")},other2:{label:v("be_o2_label"),amt:v("be_o2_amt")}},
       lien:lienObj()
     };
-    if(dealType==="marine" && $("hasCo").checked){
-      d.co={firstName:v("co_first"),middleInitial:v("co_mi"),lastName:v("co_last"),address:v("co_addr"),city:v("co_city"),state:v("co_state"),zip:v("co_zip"),phone:v("co_phone"),email:v("co_email"),dob:v("co_dob"),dl:v("co_dl"),dlState:v("co_state")};
+    if($("hasCo").checked){
+      d.co={firstName:v("co_first"),middleInitial:v("co_mi"),middleName:v("co_mi"),lastName:v("co_last"),address:v("co_addr"),city:v("co_city"),state:v("co_state"),zip:v("co_zip"),phone:v("co_phone"),email:v("co_email"),dob:v("co_dob"),dl:v("co_dl"),dlState:v("co_state")};
     }
     return d;
   }
@@ -894,6 +928,89 @@
   }
 
   $("startBtn").addEventListener("click",function(){ generate().catch(function(e){ $("errbox").innerHTML="<div class='err'>Error: "+e.message+"</div>"; }); });
+
+  // ---------- Quick fill from screenshots ----------
+  var CO_SCHEMA = { firstName:"", middleName:"", lastName:"", address:"", city:"", state:"", zip:"", phone:"", email:"", dob:"", dl:"" };
+  var MARINE_SCHEMA = {
+    buyerIsEntity:false, firstName:"", middleName:"", middleInitial:"", lastName:"", entityName:"",
+    address:"", city:"", state:"", zip:"", parish:"", phone:"", email:"", dob:"", dl:"", dlState:"",
+    cust:"", salesAssociate:"", date:"", co:CO_SCHEMA,
+    boat:{year:"",make:"",model:"",hin:"",newUsed:"new",price:"",hullMaterial:"",vesselType:"",lengthFt:"",lengthIn:"",stock:"",dealNo:""},
+    motor:{year:"",make:"",model:"",serial:"",hp:"",price:""},
+    trailer:{year:"",make:"",model:"",serial:"",price:"",color:"",tax:""},
+    fees:{title:"",doc:"",handling:"",license:"",tire:"",mortgage:""}
+  };
+  var EQUIP_SCHEMA = {
+    buyerIsEntity:false, firstName:"", middleName:"", middleInitial:"", lastName:"", entityName:"", ein:"",
+    address:"", city:"", state:"", zip:"", parish:"", phone:"", email:"", dob:"", dl:"", dlState:"",
+    cust:"", po:"", salesAssociate:"", date:"", taxExempt:false, downPayment:"", co:CO_SCHEMA,
+    units:[{year:"2026",make:"",model:"",vin:"",body:"",color:"",newUsed:"new",stock:"",dealNo:"",price:"",options:"",optionsDesc:"INSTALL ACCESSORIES",rebate:"",tax:""}],
+    fees:{title:"",doc:"",handling:"",license:"",tire:"",mortgage:""}
+  };
+  function buildPrompt(){
+    var isM = dealType==="marine";
+    var schema = JSON.stringify(isM?MARINE_SCHEMA:EQUIP_SCHEMA, null, 2);
+    return "You are reading screenshots of an IDS "+(isM?"Marine (boat / motor / trailer)":"Equipment (Kubota / Polaris)")+" deal for Henderson. "+
+      "Return ONLY a JSON object - no prose, no code fences - matching exactly this shape (omit any field or block you cannot see):\n\n"+schema+"\n\n"+
+      "Rules:\n"+
+      "- IDS \"Given Name\" holds the first AND middle name together (e.g. \"BRANDON J\", \"JOHN KENNETH\"): split into firstName and middleName, and set middleInitial to the first letter of the middle name. ALWAYS capture the middle name when present.\n"+
+      "- A business/entity buyer is NOT split: set buyerIsEntity true and fill entityName only.\n"+
+      "- CO-BUYER / joint owner: if the deal screen shows a Co-Buyer (a second customer), fill the \"co\" block (their name split the same way, address, DOB, DL). If there is no co-buyer, omit the \"co\" block entirely.\n"+
+      "- salesAssociate: the salesperson / \"Main Slsmn\" on the deal (first name listed if several).\n"+
+      "- date: the Sale Date shown on the deal (MM/DD/YYYY). If no sale date is shown, omit it.\n"+
+      "- Omit any field you cannot see; keep the keys you fill. Money as plain numbers, no $ or commas. New vs used from the N-NEW / U-USED designation.\n"+
+      "- THE VIN/SERIAL IS REQUIRED. In IDS it is the \"Serial #\" field on the Description / stock screen (and the VIN column of any list). Always capture it.\n"+
+      (isM?"- boat.hin = the Hull ID / \"Serial #\" on the boat Description tab. motor.serial = the motor \"Serial No\". trailer.serial = the trailer \"Serial #\" (its VIN for titling).\n":"- Each unit's vin = its \"Serial #\" on the Description/stock screen. One object per unit in \"units\"; fleet deals repeat the same price/fees, only VIN/stock/model change. body is UTV/RTV/ATV as shown.\n")+
+      "- Do NOT include dealer, bank, lien, or seller info - the tool adds those.";
+  }
+  $("copyPromptBtn").addEventListener("click",function(){
+    var p=buildPrompt();
+    function ok(){ $("copyPromptBtn").textContent="✓ Copied — paste into Claude"; setTimeout(function(){$("copyPromptBtn").textContent="① Copy screenshot prompt";},2500); }
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(p).then(ok,function(){window.prompt("Copy this prompt:",p);}); }
+    else { window.prompt("Copy this prompt:",p); }
+  });
+  function setVal(id,val){ if(val===undefined||val===null) return; var e=$(id); if(e){ e.value=val; } }
+  function setChk(id,val){ var e=$(id); if(e && typeof val==="boolean"){ e.checked=val; } }
+  function loadJSON(){
+    var txt=$("importBox").value.trim(); if(!txt){ $("importMsg").textContent="Paste the JSON first."; return; }
+    txt=txt.replace(/^```(json)?/i,"").replace(/```$/,"").trim();
+    var d; try{ d=JSON.parse(txt); }catch(e){ $("importMsg").textContent="Couldn't read that JSON — "+e.message; return; }
+    if(typeof d.buyerIsEntity==="boolean"){ $("isEntity").checked=d.buyerIsEntity; $("isEntity").dispatchEvent(new Event("change")); }
+    ["firstName","middleInitial","middleName","lastName","address","city","state","zip","parish","phone","email","dob","dl","dlState"].forEach(function(k){ setVal(k,d[k]); });
+    setVal("entity",d.entityName); setVal("ein",d.ein); setVal("cust",d.cust); setVal("po",d.po);
+    setVal("salesAssoc",d.salesAssociate); setVal("date",d.date); setVal("f_down",d.downPayment);
+    if(typeof d.taxExempt==="boolean") setChk("taxExempt",d.taxExempt);
+    if(d.fees){ setVal("f_title",d.fees.title); setVal("f_doc",d.fees.doc); setVal("f_handling",d.fees.handling); setVal("f_license",d.fees.license); setVal("f_tire",d.fees.tire); setVal("f_mortgage",d.fees.mortgage); setVal("f_ucc",d.fees.ucc); setVal("f_wlf",d.fees.wlf); }
+    if(d.backend){ var be=d.backend; setVal("be_mech",be.mechanical); setVal("be_gap",be.gap); setVal("be_batt",be.battery); setVal("be_theft",be.theft); setVal("be_paint",be.paint); setVal("be_prepaid",be.prepaid); if(be.other1){setVal("be_o1_label",be.other1.label);setVal("be_o1_amt",be.other1.amt);} if(be.other2){setVal("be_o2_label",be.other2.label);setVal("be_o2_amt",be.other2.amt);} }
+    if(d.parish===undefined && d.city){ var pp=PARISH[String(d.city).toUpperCase()]; if(pp) setVal("parish",pp); }
+    // co-buyer (both deal types)
+    if(d.co && (d.co.firstName || d.co.lastName)){
+      $("hasCo").checked=true; $("coFields").classList.remove("hidden");
+      setVal("co_first",d.co.firstName); setVal("co_mi",d.co.middleInitial || (d.co.middleName?d.co.middleName.charAt(0):"")); setVal("co_last",d.co.lastName);
+      setVal("co_addr",d.co.address); setVal("co_city",d.co.city); setVal("co_state",d.co.state); setVal("co_zip",d.co.zip);
+      setVal("co_phone",d.co.phone); setVal("co_dl",d.co.dl); setVal("co_email",d.co.email); setVal("co_dob",d.co.dob);
+    }
+    if(dealType==="marine"){
+      var b=d.boat||{};
+      setVal("b_year",b.year);setVal("b_make",b.make);setVal("b_model",b.model);setVal("b_hin",b.hin||b.vin||b.serial||b.hid);setVal("b_price",b.price);
+      if(b.newUsed)setVal("b_nu",b.newUsed); if(b.hullMaterial)setVal("b_hull",b.hullMaterial); if(b.vesselType)setVal("b_vtype",b.vesselType);
+      setVal("b_ft",b.lengthFt);setVal("b_in",b.lengthIn);setVal("b_stock",b.stock);setVal("b_deal",b.dealNo);
+      if(d.motor){var m=d.motor;setVal("m_year",m.year);setVal("m_make",m.make);setVal("m_model",m.model);setVal("m_serial",m.serial);setVal("m_hp",m.hp);setVal("m_price",m.price);}
+      if(d.trailer){var t=d.trailer;setVal("t_year",t.year);setVal("t_make",t.make);setVal("t_model",t.model);setVal("t_serial",t.serial||t.vin||t.hin);setVal("t_price",t.price);setVal("t_color",t.color);setVal("t_tax",t.tax);}
+      $("importMsg").textContent="Loaded. Review the fields, then START DEAL.";
+    } else {
+      $("units").innerHTML=""; unitSeq=0;
+      var list=(d.units&&d.units.length)?d.units:[{}];
+      list.forEach(function(u){
+        addUnit(); var blk=$("units").lastChild;
+        function sq(c,val){var e=blk.querySelector("."+c); if(e&&val!==undefined&&val!==null)e.value=val;}
+        sq("u_year",u.year);sq("u_make",u.make);sq("u_model",u.model);sq("u_vin",u.vin||u.serial||u.hin);sq("u_body",u.body);sq("u_color",u.color);
+        if(u.newUsed)sq("u_nu",u.newUsed); sq("u_stock",u.stock);sq("u_deal",u.dealNo);sq("u_price",u.price);sq("u_options",u.options);sq("u_optdesc",u.optionsDesc);sq("u_rebate",u.rebate);sq("u_tax",u.tax);
+      });
+      $("importMsg").textContent="Loaded "+list.length+" unit(s). Review, then START DEAL.";
+    }
+  }
+  $("loadJsonBtn").addEventListener("click",loadJSON);
 
   renderBanks(); renderForms();
 })();
